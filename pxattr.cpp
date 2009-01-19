@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #if defined(__FreeBSD__)
 #include <sys/extattr.h>
@@ -45,7 +46,14 @@ bool get(const string& path, nspace dom, const string& _name, string *value)
     AutoBuf buf;
 
 #if defined(__FreeBSD__)
-
+    ret = extattr_get_file(path.c_str(), EXTATTR_NAMESPACE_USER, name.c_str(), 
+			   0, 0);
+    if (ret < 0)
+	return false;
+    if (!buf.alloc(ret+1)) // Don't want to mess with possible ret=0
+	return false;
+    ret = extattr_get_file(path.c_str(), EXTATTR_NAMESPACE_USER, name.c_str(), 
+			   buf.buf, ret);
 #elif defined(__gnu_linux__)
     ret = getxattr(path.c_str(), name.c_str(), 0, 0);
     if (ret < 0)
@@ -77,7 +85,8 @@ bool set(const string& path, nspace dom, const string& _name,
     ssize_t ret = -1;
 
 #if defined(__FreeBSD__)
-
+    ret = extattr_set_file(path.c_str(), EXTATTR_NAMESPACE_USER, name.c_str(), 
+			   value.c_str(), value.length());
 #elif defined(__gnu_linux__)
     ret = setxattr(path.c_str(), name.c_str(), value.c_str(), value.length(),
 		   0);
@@ -97,7 +106,8 @@ bool del(const string& path, nspace dom, const string& _name)
     int ret = -1;
 
 #if defined(__FreeBSD__)
-
+    ret = extattr_delete_file(path.c_str(), EXTATTR_NAMESPACE_USER,
+			      name.c_str());
 #elif defined(__gnu_linux__)
     ret = removexattr(path.c_str(), name.c_str());
 #elif defined(__APPLE__)
@@ -111,7 +121,13 @@ bool list(const string& path, nspace dom, vector<string>* names)
     ssize_t ret = -1;
     AutoBuf buf;
 #if defined(__FreeBSD__)
-
+    ret = extattr_list_file(path.c_str(), EXTATTR_NAMESPACE_USER, 0, 0);
+    if (ret < 0) 
+	return false;
+    if (!buf.alloc(ret+1)) // NEEDED on FreeBSD (no ending null)
+	return false;
+    ret = extattr_list_file(path.c_str(), EXTATTR_NAMESPACE_USER, buf.buf, 
+			    ret);
 #elif defined(__gnu_linux__)
     ret = listxattr(path.c_str(), 0, 0);
     if (ret < 0) 
@@ -128,11 +144,27 @@ bool list(const string& path, nspace dom, vector<string>* names)
     ret = listxattr(path.c_str(), buf.buf, ret, 0);
 #endif
 
-    // All systems return a 0-separated string list
+    char *bufstart = buf.buf;
+
+    // All systems return a 0-separated string list except FreeBSD
+    // which has length, value pairs, length is a byte. 
+#if defined(__FreeBSD__)
+    char *cp = buf.buf;
+    unsigned int len;
+    while (cp < buf.buf + ret + 1) {
+	len = *cp;
+	*cp = 0;
+	cp += len + 1;
+    }
+    bufstart = buf.buf + 1;
+    *cp = 0; // don't forget, we allocated one more
+#endif
+
+
     if (ret > 0) {
 	int pos = 0;
 	while (pos < ret) {
-	    string n = string(buf.buf + pos);
+	    string n = string(bufstart + pos);
 	    string n1;
 	    if (pxname(PXATTR_USER, n, &n1)) {
 		names->push_back(n1);

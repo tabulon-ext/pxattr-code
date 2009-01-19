@@ -2,6 +2,7 @@
 
 #include <sys/types.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #if defined(__FreeBSD__)
 #include <sys/extattr.h>
@@ -39,12 +40,19 @@ bool get(const string& path, nspace dom, const string& _name, string *value)
     string name;
     if (!sysname(dom, _name, &name)) 
 	return false;
+
     ssize_t ret = -1;
     AutoBuf buf;
+
 #if defined(__FreeBSD__)
 
 #elif defined(__gnu_linux__)
-
+    ret = getxattr(path.c_str(), name.c_str(), 0, 0);
+    if (ret < 0)
+	return false;
+    if (!buf.alloc(ret+1)) // Don't want to mess with possible ret=0
+	return false;
+    ret = getxattr(path.c_str(), name.c_str(), buf.buf, ret);
 #elif defined(__APPLE__)
     ret = getxattr(path.c_str(), name.c_str(), 0, 0, 0, 0);
     if (ret < 0)
@@ -53,6 +61,7 @@ bool get(const string& path, nspace dom, const string& _name, string *value)
 	return false;
     ret = getxattr(path.c_str(), name.c_str(), buf.buf, ret, 0, 0);
 #endif
+
     if (ret >= 0)
 	value->assign(buf.buf, ret);
     return ret >= 0;
@@ -64,11 +73,14 @@ bool set(const string& path, nspace dom, const string& _name,
     string name;
     if (!sysname(dom, _name, &name)) 
 	return false;
+
     ssize_t ret = -1;
+
 #if defined(__FreeBSD__)
 
 #elif defined(__gnu_linux__)
-
+    ret = setxattr(path.c_str(), name.c_str(), value.c_str(), value.length(),
+		   0);
 #elif defined(__APPLE__)
     ret = setxattr(path.c_str(), name.c_str(), value.c_str(), value.length(),
 		   0, 0);
@@ -81,11 +93,13 @@ bool del(const string& path, nspace dom, const string& _name)
     string name;
     if (!sysname(dom, _name, &name)) 
 	return false;
+
     int ret = -1;
+
 #if defined(__FreeBSD__)
 
 #elif defined(__gnu_linux__)
-
+    ret = removexattr(path.c_str(), name.c_str());
 #elif defined(__APPLE__)
     ret = removexattr(path.c_str(), name.c_str(), 0);
 #endif
@@ -99,7 +113,12 @@ bool list(const string& path, nspace dom, vector<string>* names)
 #if defined(__FreeBSD__)
 
 #elif defined(__gnu_linux__)
-
+    ret = listxattr(path.c_str(), 0, 0);
+    if (ret < 0) 
+	return false;
+    if (!buf.alloc(ret+1)) // Don't want to mess with possible ret=0
+	return false;
+    ret = listxattr(path.c_str(), buf.buf, ret);
 #elif defined(__APPLE__)
     ret = listxattr(path.c_str(), 0, 0, 0);
     if (ret < 0) 

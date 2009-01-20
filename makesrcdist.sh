@@ -15,6 +15,9 @@ SVNREPOS=svn+ssh://y/home/subversion/pxattr/
 version=`cat VERSION`
 versionforcvs=`echo $version | sed -e 's/\./_/g'`
 
+doxygen Doxyfile
+(cd doc/html; svn commit -m "$version")
+
 editedfiles=`svn status | egrep -v '^\?'`
 if test ! -z "$editedfiles"; then
 	fatal  "Edited files exist: " $editedfiles

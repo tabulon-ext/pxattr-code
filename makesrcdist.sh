@@ -50,7 +50,7 @@ yes | clean.O
 
 $TAR chfX - excludefile .  | (cd $topdir;$TAR xf -)
 
-TAG="RECOLL_$versionforcvs"
+TAG="PXATTR_$versionforcvs"
 [ $dotag = "yes" ] && tagtop $TAG
 
 out=pxattr-$version.tar.gz

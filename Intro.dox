@@ -1,4 +1,4 @@
-/** @mainpage pXattr: portable extended attributes C++ programming interface
+/** @mainpage pxattr: portable extended attributes C++ programming interface
  *    
  * @authors Jean-Francois Dockes <jfd@recoll.org>
  *
@@ -15,7 +15,7 @@
  * Linux, FreeBSD and Mac OS X all provide similar extended attributes 
  * functionality.
  *
- * The pXattr package aims at providing a single interface to extended
+ * The pxattr package aims at providing a single interface to extended
  * attributes on all three systems. It consists in a single C++ module (one 
  * source and one include file), which is to be included in the application 
  * source code (being too trivial to justify a library).
@@ -23,8 +23,10 @@
  * The C++ file can also be compiled to a command line program, which is both
  * a test tool and a handy way to manage attributes from the command line.
  *
- * pXattr is free software, licensed in BSD style (also see top of source
- * files), use it freely:
+ * pxattr is free software, licensed in BSD style (also see top of source
+ * files), use it freely.
+ *
+ * Download pxattr: <a href="pxattr-1.0.tar.gz">pxattr-1.0.tar.gz</a> 
  *
  * @par Licensing
  * Copyright (c) 2009 - Jean-Francois Dockes - SEVRES - FRANCE

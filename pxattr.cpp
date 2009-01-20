@@ -162,7 +162,7 @@ set(int fd, const string& path, const string& _name,
 	if (eret < 0 && errno != ENOATTR)
 	    return false;
 	if ((flags & PXATTR_CREATE) && exists) {
-	    errno = EEXISTS;
+	    errno = EEXIST;
 	    return false;
 	}
 	if ((flags & PXATTR_REPLACE) && !exists) {

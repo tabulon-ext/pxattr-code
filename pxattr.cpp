@@ -250,7 +250,7 @@ del(int fd, const string& path, const string& _name, flags flags, nspace dom)
 	    ret = removexattr(path.c_str(), name.c_str());
 	}
     } else {
-	ret = fremovexattr(path.c_str(), name.c_str());
+	ret = fremovexattr(fd, name.c_str());
     }
 #elif defined(__APPLE__)
     if (fd < 0) {

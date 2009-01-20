@@ -1,6 +1,6 @@
 #ifndef _pxattr_h_included_
 #define _pxattr_h_included_
-/* @(#$Id: pxattr.h,v 1.3 2009-01-20 12:51:17 dockes Exp $  (C) 2009 J.F.Dockes */
+/* @(#$Id: pxattr.h,v 1.4 2009-01-20 13:21:12 dockes Exp $  (C) 2009 J.F.Dockes */
 
 #include <string>
 #include <vector>
@@ -25,6 +25,10 @@ using std::vector;
  *
  * MacOsX does not segment the attribute name space.
  * 
+ * In order to avoid conflicts, it is recommended that attributes
+ * names be chosen in a "reverse dns" fashion, ie:
+ * org.recoll.indexing.status
+ *
  * The interface provided should work the same way on all 3 systems,
  * it papers over such differences as the "list" output format,
  * the existence of CREATE/UPDATE distinctions, etc.

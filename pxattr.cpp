@@ -452,10 +452,11 @@ bool pxname(nspace dom, const string& sname, string* pname)
 
 static char *thisprog;
 static char usage [] =
-"trpxattr [-h] -n name [-v value] pathname...\n"
-"trpxattr [-h] -x name pathname...\n"
-"trpxattr [-h] -l pathname...\n"
-"trpxattr -T: run tests on temp file in current directory" 
+"pxattr [-h] -n name [-v value] pathname...\n"
+"pxattr [-h] -x name pathname...\n"
+"pxattr [-h] -l pathname...\n"
+" [-h] : don't follow symbolic links (act on link itself)\n"
+"pxattr -T: run tests on temp file in current directory" 
 "\n"
 ;
 static void
@@ -477,7 +478,8 @@ static int     op_flags;
 static void dotests()
 {
     static const char *tfn = "pxattr_testtmp.xyz";
-    static const char *NAMES[] = {"NAME1", "N2", "LONGGGGGGGGGGGisSSSHHHHHHHHHNAME3"};
+    static const char *NAMES[] = {"ORG.PXATTR.NAME1", "ORG.PXATTR.N2", 
+				  "ORG.PXATTR.LONGGGGGGGGisSSSHHHHHHHHHNAME3"};
     static const char *VALUES[] = {"VALUE1", "VALUE2", "VALUE3"};
     static bool verbose = true;
 

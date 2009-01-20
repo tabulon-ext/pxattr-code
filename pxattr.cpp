@@ -36,7 +36,9 @@ public:
     }
 };
 
-bool get(const string& path, nspace dom, const string& _name, string *value)
+static bool 
+get(int fd, const string& path, const string& _name, string *value,
+    flags flags, nspace dom)
 {
     string name;
     if (!sysname(dom, _name, &name)) 
@@ -46,28 +48,80 @@ bool get(const string& path, nspace dom, const string& _name, string *value)
     AutoBuf buf;
 
 #if defined(__FreeBSD__)
-    ret = extattr_get_file(path.c_str(), EXTATTR_NAMESPACE_USER, name.c_str(), 
-			   0, 0);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = extattr_get_link(path.c_str(), EXTATTR_NAMESPACE_USER, 
+				   name.c_str(), 0, 0);
+	} else {
+	    ret = extattr_get_file(path.c_str(), EXTATTR_NAMESPACE_USER, 
+				   name.c_str(), 0, 0);
+	}
+    } else {
+	ret = extattr_get_fd(fd, EXTATTR_NAMESPACE_USER, name.c_str(), 0, 0);
+    }
     if (ret < 0)
 	return false;
-    if (!buf.alloc(ret+1)) // Don't want to mess with possible ret=0
+    if (!buf.alloc(ret+1)) // Don't want to deal with possible ret=0
 	return false;
-    ret = extattr_get_file(path.c_str(), EXTATTR_NAMESPACE_USER, name.c_str(), 
-			   buf.buf, ret);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = extattr_get_link(path.c_str(), EXTATTR_NAMESPACE_USER, 
+				   name.c_str(), buf.buf, ret);
+	} else {
+	    ret = extattr_get_file(path.c_str(), EXTATTR_NAMESPACE_USER, 
+				   name.c_str(), buf.buf, ret);
+	}
+    } else {
+	ret = extattr_get_fd(fd, EXTATTR_NAMESPACE_USER, 
+			     name.c_str(), buf.buf, ret);
+    }
 #elif defined(__gnu_linux__)
-    ret = getxattr(path.c_str(), name.c_str(), 0, 0);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = lgetxattr(path.c_str(), name.c_str(), 0, 0);
+	} else {
+	    ret = getxattr(path.c_str(), name.c_str(), 0, 0);
+	}
+    } else {
+	ret = fgetxattr(fd, name.c_str(), 0, 0);
+    }
     if (ret < 0)
 	return false;
-    if (!buf.alloc(ret+1)) // Don't want to mess with possible ret=0
+    if (!buf.alloc(ret+1)) // Don't want to deal with possible ret=0
 	return false;
-    ret = getxattr(path.c_str(), name.c_str(), buf.buf, ret);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = lgetxattr(path.c_str(), name.c_str(), buf.buf, ret);
+	} else {
+	    ret = getxattr(path.c_str(), name.c_str(), buf.buf, ret);
+	}
+    } else {
+	ret = fgetxattr(fd, name.c_str(), buf.buf, ret);
+    }
 #elif defined(__APPLE__)
-    ret = getxattr(path.c_str(), name.c_str(), 0, 0, 0, 0);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = getxattr(path.c_str(), name.c_str(), 0, 0, 0, XATTR_NOFOLLOW);
+	} else {
+	    ret = getxattr(path.c_str(), name.c_str(), 0, 0, 0, 0);
+	}
+    } else {
+	ret = fgetxattr(fd, name.c_str(), 0, 0, 0, 0);
+    }
     if (ret < 0)
 	return false;
-    if (!buf.alloc(ret+1)) // Don't want to mess with possible ret=0
+    if (!buf.alloc(ret+1)) // Don't want to deal with possible ret=0
 	return false;
-    ret = getxattr(path.c_str(), name.c_str(), buf.buf, ret, 0, 0);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = getxattr(path.c_str(), name.c_str(), buf.buf, ret, 0, 
+			   XATTR_NOFOLLOW);
+	} else {
+	    ret = getxattr(path.c_str(), name.c_str(), buf.buf, ret, 0, 0);
+	}
+    } else {
+	ret = fgetxattr(fd, name.c_str(), buf.buf, ret, 0, 0);
+    }
 #endif
 
     if (ret >= 0)
@@ -75,8 +129,9 @@ bool get(const string& path, nspace dom, const string& _name, string *value)
     return ret >= 0;
 }
 
-bool set(const string& path, nspace dom, const string& _name, 
-	    const string& value)
+static bool 
+set(int fd, const string& path, const string& _name, 
+    const string& value, flags flags, nspace dom)
 {
     string name;
     if (!sysname(dom, _name, &name)) 
@@ -85,19 +140,89 @@ bool set(const string& path, nspace dom, const string& _name,
     ssize_t ret = -1;
 
 #if defined(__FreeBSD__)
-    ret = extattr_set_file(path.c_str(), EXTATTR_NAMESPACE_USER, name.c_str(), 
-			   value.c_str(), value.length());
+    
+    if (flags & (PXATTR_CREATE|PXATTR_REPLACE)) {
+	// Need to test existence
+	bool exists = false;
+	ssize_t eret;
+	if (fd < 0) {
+	    if (flags & PXATTR_NOFOLLOW) {
+		eret = extattr_get_link(path.c_str(), EXTATTR_NAMESPACE_USER, 
+				       name.c_str(), 0, 0);
+	    } else {
+		eret = extattr_get_file(path.c_str(), EXTATTR_NAMESPACE_USER, 
+				       name.c_str(), 0, 0);
+	    }
+	} else {
+	    eret = extattr_get_fd(fd, EXTATTR_NAMESPACE_USER, 
+				  name.c_str(), 0, 0);
+	}
+	if (eret >= 0)
+	    exists = true;
+	if (eret < 0 && errno != ENOATTR)
+	    return false;
+	if ((flags & PXATTR_CREATE) && exists) {
+	    errno = EEXISTS;
+	    return false;
+	}
+	if ((flags & PXATTR_REPLACE) && !exists) {
+	    errno = ENOATTR;
+	    return false;
+	}
+    }
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = extattr_set_link(path.c_str(), EXTATTR_NAMESPACE_USER, 
+				   name.c_str(), value.c_str(), value.length());
+	} else {
+	    ret = extattr_set_file(path.c_str(), EXTATTR_NAMESPACE_USER, 
+				   name.c_str(), value.c_str(), value.length());
+	}
+    } else {
+	ret = extattr_set_fd(fd, EXTATTR_NAMESPACE_USER, 
+			     name.c_str(), value.c_str(), value.length());
+    }
 #elif defined(__gnu_linux__)
-    ret = setxattr(path.c_str(), name.c_str(), value.c_str(), value.length(),
-		   0);
+    int opts = 0;
+    if (flags & PXATTR_CREATE)
+	opts = XATTR_CREATE;
+    else if (flags & PXATTR_REPLACE)
+	opts = XATTR_REPLACE;
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = lsetxattr(path.c_str(), name.c_str(), value.c_str(), 
+			    value.length(), opts);
+	} else {
+	    ret = setxattr(path.c_str(), name.c_str(), value.c_str(), 
+			   value.length(), opts);
+	}
+    } else {
+	ret = fsetxattr(fd, name.c_str(), value.c_str(), value.length(), opts);
+    }
 #elif defined(__APPLE__)
-    ret = setxattr(path.c_str(), name.c_str(), value.c_str(), value.length(),
-		   0, 0);
+    int opts = 0;
+    if (flags & PXATTR_CREATE)
+	opts = XATTR_CREATE;
+    else if (flags & PXATTR_REPLACE)
+	opts = XATTR_REPLACE;
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = setxattr(path.c_str(), name.c_str(), value.c_str(), 
+			   value.length(),  0, XATTR_NOFOLLOW|opts);
+	} else {
+	    ret = setxattr(path.c_str(), name.c_str(), value.c_str(), 
+			   value.length(),  0, opts);
+	}
+    } else {
+	ret = fsetxattr(fd, name.c_str(), value.c_str(), 
+			value.length(), 0, opts);
+    }
 #endif
     return ret >= 0;
 }
 
-bool del(const string& path, nspace dom, const string& _name) 
+static bool 
+del(int fd, const string& path, const string& _name, flags flags, nspace dom) 
 {
     string name;
     if (!sysname(dom, _name, &name)) 
@@ -106,42 +231,118 @@ bool del(const string& path, nspace dom, const string& _name)
     int ret = -1;
 
 #if defined(__FreeBSD__)
-    ret = extattr_delete_file(path.c_str(), EXTATTR_NAMESPACE_USER,
-			      name.c_str());
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = extattr_delete_link(path.c_str(), EXTATTR_NAMESPACE_USER,
+				      name.c_str());
+	} else {
+	    ret = extattr_delete_file(path.c_str(), EXTATTR_NAMESPACE_USER,
+				      name.c_str());
+	}
+    } else {
+	ret = extattr_delete_fd(fd, EXTATTR_NAMESPACE_USER, name.c_str());
+    }
 #elif defined(__gnu_linux__)
-    ret = removexattr(path.c_str(), name.c_str());
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = lremovexattr(path.c_str(), name.c_str());
+	} else {
+	    ret = removexattr(path.c_str(), name.c_str());
+	}
+    } else {
+	ret = fremovexattr(path.c_str(), name.c_str());
+    }
 #elif defined(__APPLE__)
-    ret = removexattr(path.c_str(), name.c_str(), 0);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = removexattr(path.c_str(), name.c_str(), XATTR_NOFOLLOW);
+	} else {
+	    ret = removexattr(path.c_str(), name.c_str(), 0);
+	}
+    } else {
+	ret = fremovexattr(fd, name.c_str(), 0);
+    }
 #endif
     return ret >= 0;
 }
 
-bool list(const string& path, nspace dom, vector<string>* names)
+static bool 
+list(int fd, const string& path, vector<string>* names, flags flags, nspace dom)
 {
     ssize_t ret = -1;
     AutoBuf buf;
+
 #if defined(__FreeBSD__)
-    ret = extattr_list_file(path.c_str(), EXTATTR_NAMESPACE_USER, 0, 0);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = extattr_list_link(path.c_str(), EXTATTR_NAMESPACE_USER, 0, 0);
+	} else {
+	    ret = extattr_list_file(path.c_str(), EXTATTR_NAMESPACE_USER, 0, 0);
+	}
+    } else {
+	ret = extattr_list_fd(fd, EXTATTR_NAMESPACE_USER, 0, 0);
+    }
     if (ret < 0) 
 	return false;
     if (!buf.alloc(ret+1)) // NEEDED on FreeBSD (no ending null)
 	return false;
-    ret = extattr_list_file(path.c_str(), EXTATTR_NAMESPACE_USER, buf.buf, 
-			    ret);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = extattr_list_link(path.c_str(), EXTATTR_NAMESPACE_USER, 
+				    buf.buf, ret);
+	} else {
+	    ret = extattr_list_file(path.c_str(), EXTATTR_NAMESPACE_USER, 
+				    buf.buf, ret);
+	}
+    } else {
+	ret = extattr_list_fd(fd, EXTATTR_NAMESPACE_USER, buf.buf, ret);
+    }
 #elif defined(__gnu_linux__)
-    ret = listxattr(path.c_str(), 0, 0);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = llistxattr(path.c_str(), 0, 0);
+	} else {
+	    ret = listxattr(path.c_str(), 0, 0);
+	}
+    } else {
+	ret = flistxattr(fd, 0, 0);
+    }
     if (ret < 0) 
 	return false;
-    if (!buf.alloc(ret+1)) // Don't want to mess with possible ret=0
+    if (!buf.alloc(ret+1)) // Don't want to deal with possible ret=0
 	return false;
-    ret = listxattr(path.c_str(), buf.buf, ret);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = llistxattr(path.c_str(), buf.buf, ret);
+	} else {
+	    ret = listxattr(path.c_str(), buf.buf, ret);
+	}
+    } else {
+	ret = flistxattr(fd, buf.buf, ret);
+    }
 #elif defined(__APPLE__)
-    ret = listxattr(path.c_str(), 0, 0, 0);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = listxattr(path.c_str(), 0, 0, XATTR_NOFOLLOW);
+	} else {
+	    ret = listxattr(path.c_str(), 0, 0, 0);
+	}
+    } else {
+	ret = flistxattr(fd, 0, 0, 0);
+    }
     if (ret < 0) 
 	return false;
-    if (!buf.alloc(ret+1)) // Don't want to mess with possible ret=0
+    if (!buf.alloc(ret+1)) // Don't want to deal with possible ret=0
 	return false;
-    ret = listxattr(path.c_str(), buf.buf, ret, 0);
+    if (fd < 0) {
+	if (flags & PXATTR_NOFOLLOW) {
+	    ret = listxattr(path.c_str(), buf.buf, ret, XATTR_NOFOLLOW);
+	} else {
+	    ret = listxattr(path.c_str(), buf.buf, ret, 0);
+	}
+    } else {
+	ret = flistxattr(fd, buf.buf, ret, 0);
+    }
 #endif
 
     char *bufstart = buf.buf;
@@ -173,6 +374,44 @@ bool list(const string& path, nspace dom, vector<string>* names)
 	}
     }
     return true;
+}
+
+static const string nullstring("");
+
+bool get(const string& path, const string& _name, string *value,
+	 flags flags, nspace dom)
+{
+    return get(-1, path, _name, value, flags, dom);
+}
+bool get(int fd, const string& _name, string *value, flags flags, nspace dom)
+{
+    return get(fd, nullstring, _name, value, flags, dom);
+}
+bool set(const string& path, const string& _name, const string& value,
+	 flags flags, nspace dom)
+{
+    return set(-1, path, _name, value, flags, dom);
+}
+bool set(int fd, const string& _name, const string& value, 
+	 flags flags, nspace dom)
+{
+    return set(fd, nullstring, _name, value, flags, dom);
+}
+bool del(const string& path, const string& _name, flags flags, nspace dom) 
+{
+    return del(-1, path, _name, flags, dom);
+}
+bool del(int fd, const string& _name, flags flags, nspace dom) 
+{
+    return del(fd, nullstring, _name, flags, dom);
+}
+bool list(const string& path, vector<string>* names, flags flags, nspace dom)
+{
+    return list(-1, path, names, flags, dom);
+}
+bool list(int fd, vector<string>* names, flags flags, nspace dom)
+{
+    return list(fd, nullstring, names, flags, dom);
 }
 
 static const string userstring("user.");
@@ -236,14 +475,14 @@ static void listattrs(const string& path)
 {
     std::cout << "Path: " << path << std::endl;
     vector<string> names;
-    if (!pxattr::list(path, pxattr::PXATTR_USER, &names)) {
+    if (!pxattr::list(path, &names)) {
 	perror("pxattr::list");
 	exit(1);
     }
     for (vector<string>::const_iterator it = names.begin(); 
 	 it != names.end(); it++) {
 	string value;
-	if (!pxattr::get(path, pxattr::PXATTR_USER, *it, &value)) {
+	if (!pxattr::get(path, *it, &value)) {
 	    perror("pxattr::get");
 	    exit(1);
 	}
@@ -253,7 +492,7 @@ static void listattrs(const string& path)
 
 void setxattr(const string& path, const string& name, const string& value)
 {
-    if (!pxattr::set(path, pxattr::PXATTR_USER, name, value)) {
+    if (!pxattr::set(path, name, value)) {
 	perror("pxattr::set");
 	exit(1);
     }
@@ -263,7 +502,7 @@ void  printxattr(const string &path, const string& name)
 {
     std::cout << "Path: " << path << std::endl;
     string value;
-    if (!pxattr::get(path, pxattr::PXATTR_USER, name, &value)) {
+    if (!pxattr::get(path, name, &value)) {
 	perror("pxattr::get");
 	exit(1);
     }
@@ -272,7 +511,7 @@ void  printxattr(const string &path, const string& name)
 
 void delxattr(const string &path, const string& name) 
 {
-    if (pxattr::del(path, pxattr::PXATTR_USER, name) < 0) {
+    if (pxattr::del(path, name) < 0) {
 	perror("pxattr::del");
 	exit(1);
     }

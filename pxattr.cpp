@@ -1,4 +1,3 @@
-#ifndef TEST_PXATTR
 /* @(#$Id: pxattr.cpp,v 1.9 2009-01-20 13:48:34 dockes Exp $  (C) 2009 J.F.Dockes
 Copyright (c) 2009 Jean-Francois Dockes
 
@@ -23,6 +22,12 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 */
+
+// We want this to compile even to empty on non-supported systems. makes
+// things easier for autoconf
+#if defined(__FreeBSD__) || defined(__gnu_linux__) || defined(__APPLE__)
+
+#ifndef TEST_PXATTR
 
 #include <sys/types.h>
 #include <errno.h>
@@ -727,3 +732,5 @@ int main(int argc, char **argv)
 
 
 #endif // Testing pxattr
+
+#endif // Supported systems.

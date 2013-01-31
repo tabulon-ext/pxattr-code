@@ -5,6 +5,8 @@
 *~
 .#*
 .#*
+.hg
+.hgtags
 .moc
 .obj
 .svn

@@ -444,7 +444,6 @@ bool list(int fd, vector<string>* names, flags flags, nspace dom)
 }
 
 #if defined(__gnu_linux__) || defined(COMPAT1)
-#warning COMPAT1
 static const string userstring("user.");
 #else
 static const string userstring("");

@@ -10,22 +10,20 @@ fatal()
 #set -x
 
 TAR=/usr/bin/tar
-SVNREPOS=svn+ssh://y/home/subversion/pxattr/
 
 version=`cat VERSION`
 versionforcvs=`echo $version | sed -e 's/\./_/g'`
 
 doxygen Doxyfile
-(cd doc/html; svn commit -m "$version")
+(cd doc/html; hg commit -m "$version")
 
-editedfiles=`svn status | egrep -v '^\?'`
+editedfiles=`hg status | egrep -v '^\?'`
 if test ! -z "$editedfiles"; then
-	fatal  "Edited files exist: " $editedfiles
+    fatal  "Edited files exist: " $editedfiles
 fi
 
 tagtop() {
-  svn copy -m "Release $version tagged" . $SVNREPOS/tags/$1 || \
-	    	fatal tag failed
+    hg tag -m "Release $version tagged" $1 || fatal tag failed
 }
 
 targetdir=${targetdir-/tmp}

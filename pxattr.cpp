@@ -443,7 +443,12 @@ bool list(int fd, vector<string>* names, flags flags, nspace dom)
     return list(fd, nullstring, names, flags, dom);
 }
 
+#if defined(__gnu_linux__) || defined(COMPAT1)
+#warning COMPAT1
 static const string userstring("user.");
+#else
+static const string userstring("");
+#endif
 bool sysname(nspace dom, const string& pname, string* sname)
 {
     if (dom != PXATTR_USER) {
@@ -456,7 +461,7 @@ bool sysname(nspace dom, const string& pname, string* sname)
 
 bool pxname(nspace dom, const string& sname, string* pname) 
 {
-    if (sname.find("user.") != 0) {
+    if (!userstring.empty() && sname.find(userstring) != 0) {
 	errno = EINVAL;
 	return false;
     }
@@ -706,6 +711,9 @@ int main(int argc, char **argv)
 
   if (argc < 1 && !(op_flags & OPT_T))
     Usage();
+  if (op_flags == 0)
+      op_flags = OPT_l;
+
   if (op_flags & OPT_l) {
       while (argc > 0) {
 	  listattrs(*argv++);argc--;

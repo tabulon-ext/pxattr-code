@@ -4,8 +4,8 @@
  *
  * @section intro Introduction
  * 
- * Extended attributes are pieces of arbitrarily named data associated with
- * a file and managed by the file system. 
+ * Extended attributes are arbitrarily named pieces of data associated
+ * with a file and managed by the file system.
  *
  * The names and the values for the attributes are freely chosen by
  * applications and/or users, with very few restrictions.
@@ -20,13 +20,31 @@
  * source and one include file), which is to be included in the application 
  * source code (being too trivial to justify a library).
  *
+ * Linux note: on Linux, user attributes are distinguished by having a
+ * "user." prefix in their name. On Mac OS X and FreeBSD, the user and
+ * other name spaces are distinguished by argument to the library calls.
+ * pxattr hides the "user." prefix on Linux, so that you should not specify it
+ * when reading or setting a value.
+ *
+ * The previous version of the library had a bug which had it adding the
+ * "user." prefix to names on other platforms. This was not a main issue
+ * inside pxattr, but posed a compatibility problem when using raw system
+ * utilities or moving files between systems. Version 2.0 fixes this
+ * problem but the change means that it is incompatible with attributes
+ * created by pxattr 1.0 (which contain the "user." prefix, which will
+ * appear when listing the attributes and now need to be added when
+ * fetching a value. You can use "make CXXFLAGS=-DCOMPAT1 to force
+ * the 1.0 behaviour with 2.0. This does not make a lot of sense though,
+ * because you're just as well staying with 1.0 then, as nothing else has
+ * changed.
+ * 
  * The C++ file can also be compiled to a command line program, which is both
  * a test tool and a handy way to manage attributes from the command line.
  *
  * pxattr is free software, with an MIT-type license, use and redistribute 
  * freely.
  *
- * Download pxattr: <a href="pxattr-1.0.5.tar.gz">pxattr-1.0.5.tar.gz</a> 
+ * Download pxattr: <a href="pxattr-2.0.0.tar.gz">pxattr-2.0.0.tar.gz</a> 
  *
  * @par Licensing
  * Copyright (c) 2009 Jean-Francois Dockes

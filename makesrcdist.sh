@@ -15,7 +15,7 @@ version=`cat VERSION`
 versionforcvs=`echo $version | sed -e 's/\./_/g'`
 
 doxygen Doxyfile
-(cd doc/html; hg commit -m "$version")
+(cd doc/html; hg commit -m "$version" .)
 
 editedfiles=`hg status | egrep -v '^\?'`
 if test ! -z "$editedfiles"; then

@@ -478,35 +478,12 @@ bool pxname(nspace dom, const string& sname, string* pname)
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <ftw.h>
 
 #include <iostream>
+using namespace std;
 
 #include "pxattr.h"
-
-static char *thisprog;
-static char usage [] =
-"pxattr [-h] -n name [-v value] pathname...\n"
-"pxattr [-h] -x name pathname...\n"
-"pxattr [-h] -l pathname...\n"
-" [-h] : don't follow symbolic links (act on link itself)\n"
-"pxattr -T: run tests on temp file in current directory" 
-"\n"
-;
-static void
-Usage(void)
-{
-    fprintf(stderr, "%s: usage:\n%s", thisprog, usage);
-    exit(1);
-}
-
-static int     op_flags;
-#define OPT_MOINS 0x1
-#define OPT_n	  0x2 
-#define OPT_v	  0x4 
-#define OPT_h     0x8
-#define OPT_x     0x10
-#define OPT_l     0x20
-#define OPT_T     0x40
 
 static void dotests()
 {
@@ -633,9 +610,12 @@ static void dotests()
 
 static void listattrs(const string& path)
 {
-    std::cout << "Path: " << path << std::endl;
+    cout << "Path: " << path << endl;
     vector<string> names;
     if (!pxattr::list(path, &names)) {
+	if (errno == ENOENT) {
+	    return;
+	}
 	perror("pxattr::list");
 	exit(1);
     }
@@ -643,10 +623,13 @@ static void listattrs(const string& path)
 	 it != names.end(); it++) {
 	string value;
 	if (!pxattr::get(path, *it, &value)) {
+	    if (errno == ENOENT) {
+		return;
+	    }
 	    perror("pxattr::get");
 	    exit(1);
 	}
-	std::cout << " " << *it << " => " << value << std::endl;
+	cout << " " << *it << " => " << value << endl;
     }
 }
 
@@ -660,13 +643,16 @@ void setxattr(const string& path, const string& name, const string& value)
 
 void  printxattr(const string &path, const string& name)
 {
-    std::cout << "Path: " << path << std::endl;
+    cout << "Path: " << path << endl;
     string value;
     if (!pxattr::get(path, name, &value)) {
+	if (errno == ENOENT) {
+	    return;
+	}
 	perror("pxattr::get");
 	exit(1);
     }
-    std::cout << " " << name << " => " << value << std::endl;
+    cout << " " << name << " => " << value << endl;
 }
 
 void delxattr(const string &path, const string& name) 
@@ -677,64 +663,120 @@ void delxattr(const string &path, const string& name)
     }
 }
 
+static char *thisprog;
+static char usage [] =
+"pxattr [-h] -n name pathname [...] : show value for name\n"
+"pxattr [-h] -n name -v value pathname [...] : add/replace attribute\n"
+"pxattr [-h] -x name pathname [...] : delete attribute\n"
+"pxattr [-h] [-l] [-R] pathname [...] : list attribute names and values\n"
+" [-h] : don't follow symbolic links (act on link itself)\n"
+"pxattr -T: run tests on temp file in current directory" 
+"\n"
+;
+static void
+Usage(void)
+{
+    fprintf(stderr, "%s: usage:\n%s", thisprog, usage);
+    exit(1);
+}
+
+static int     op_flags;
+#define OPT_MOINS 0x1
+#define OPT_n	  0x2 
+#define OPT_v	  0x4 
+#define OPT_h     0x8
+#define OPT_x     0x10
+#define OPT_l     0x20
+#define OPT_T     0x40
+#define OPT_R     0x80
+
+static string name, value;
+
+int processfile(const char* fn, const struct stat *sb, int typeflag)
+{
+    //cout << "processfile " << fn << " opflags " << op_flags << endl;
+
+    if (op_flags & OPT_l) {
+	listattrs(fn);
+    } else if (op_flags & OPT_n) {
+	if (op_flags & OPT_v) {
+	    setxattr(fn, name, value);
+	} else {
+	    printxattr(fn, name);
+	} 
+    } else if (op_flags & OPT_x) {
+	delxattr(fn, name);
+    } 
+    return 0;
+}
 
 int main(int argc, char **argv)
 {
-  thisprog = argv[0];
-  argc--; argv++;
+    thisprog = argv[0];
+    argc--; argv++;
 
-  string name, value;
+    while (argc > 0 && **argv == '-') {
+	(*argv)++;
+	if (!(**argv))
+	    /* Cas du "adb - core" */
+	    Usage();
+	while (**argv)
+	    switch (*(*argv)++) {
+	    case 'l':	op_flags |= OPT_l; break;
+	    case 'n':	op_flags |= OPT_n; if (argc < 2)  Usage();
+		name = *(++argv); argc--; 
+		goto b1;
+	    case 'R':	op_flags |= OPT_R; break;
+	    case 'T':	op_flags |= OPT_T; break;
+	    case 'v':	op_flags |= OPT_v; if (argc < 2)  Usage();
+		value = *(++argv); argc--; 
+		goto b1;
+	    case 'x':	op_flags |= OPT_x; if (argc < 2)  Usage();
+		name = *(++argv); argc--; 
+		goto b1;
+	    default: Usage();	break;
+	    }
+    b1: argc--; argv++;
+    }
 
-  while (argc > 0 && **argv == '-') {
-    (*argv)++;
-    if (!(**argv))
-      /* Cas du "adb - core" */
-      Usage();
-    while (**argv)
-      switch (*(*argv)++) {
-      case 'T':	op_flags |= OPT_T; break;
-      case 'l':	op_flags |= OPT_l; break;
-      case 'x':	op_flags |= OPT_x; if (argc < 2)  Usage();
-	  name = *(++argv); argc--; 
-	goto b1;
-      case 'n':	op_flags |= OPT_n; if (argc < 2)  Usage();
-	  name = *(++argv); argc--; 
-	goto b1;
-      case 'v':	op_flags |= OPT_v; if (argc < 2)  Usage();
-	  value = *(++argv); argc--; 
-	goto b1;
-      default: Usage();	break;
-      }
-  b1: argc--; argv++;
-  }
+    if (op_flags & OPT_T)  {
+	if (argc > 0)
+	    Usage();
+	dotests();
+	exit(0);
+    }
 
-  if (argc < 1 && !(op_flags & OPT_T))
-    Usage();
-  if (op_flags == 0)
-      op_flags = OPT_l;
+    // Default option is 'list'
+    if ((op_flags&(OPT_l|OPT_n|OPT_x)) == 0)
+	op_flags |= OPT_l;
 
-  if (op_flags & OPT_l) {
-      while (argc > 0) {
-	  listattrs(*argv++);argc--;
-      } 
-  } else if (op_flags & OPT_n) {
-      if (op_flags & OPT_v) {
-	  while (argc > 0) {
-	      setxattr(*argv++, name, value);argc--;
-	  } 
-      } else {
-	  while (argc > 0) {
-	      printxattr(*argv++, name);argc--;
-	  } 
-      }
-  } else if (op_flags & OPT_x) {
-      while (argc > 0) {
-	  delxattr(*argv++, name);argc--;
-      } 
-  } else if (op_flags & OPT_T)  {
-      dotests();
-  }
-  exit(0);
+    bool readstdin = false;
+    if (argc == 0)
+	readstdin = true;
+
+    for (;;) {
+	const char *fn = 0;
+	if (argc > 0) {
+	    fn = *argv++; 
+	    argc--;
+	} else if (readstdin) {
+	    static char filename[1025];
+	    if (!fgets(filename, 1024, stdin))
+		break;
+	    filename[strlen(filename)-1] = 0;
+	    fn = filename;
+	} else
+	    break;
+
+	if (op_flags & OPT_R) {
+	    if (ftw(fn, processfile, 20))
+		exit(1);
+	} else {
+	    processfile(fn, 0, 0);
+	}
+    } 
+
+    exit(0);
 }
 
 

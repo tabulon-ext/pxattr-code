@@ -43,22 +43,34 @@
 <h1><a class="anchor" id="intro"></a>
 Introduction</h1>
 <p>Extended attributes are arbitrarily named pieces of data associated with a file and managed by the file system.</p>
-<p>The names and the values for the attributes are freely chosen by applications and/or users, with very few restrictions. Most recent systems support extended attributes, but the interfaces used to manage them are far from identical.</p>
+<p>The names and the values for the attributes are freely chosen by applications and/or users, with very few restrictions. Many recent systems and filesystems support extended attributes, but the interfaces used to manage them are far from identical.</p>
 <p>Linux, FreeBSD and Mac OS X all provide similar extended attributes functionality.</p>
+<h1><a class="anchor" id="pxattr"></a>
+Pxattr</h1>
 <p>The pxattr package aims at providing a single interface to extended attributes on all three systems. It consists in a single C++ module (one source and one include file), which is to be included in the application source code (being too trivial to justify a library).</p>
 <p>Linux note: on Linux, user attributes are distinguished by having a "user." prefix in their name. On Mac OS X and FreeBSD, the user and other name spaces are distinguished by argument to the library calls. pxattr hides the "user." prefix on Linux, so that you should not specify it when reading or setting a value.</p>
-<p>The previous version of the library had a bug which had it adding the "user." prefix to names on other platforms. This was not a main issue inside pxattr, but posed a compatibility problem when using raw system utilities or moving files between systems. Version 2.0 fixes this problem but the change means that it is incompatible with attributes created by pxattr 1.0 (which contain the "user." prefix, which will appear when listing the attributes and now need to be added when fetching a value. You can use "make CXXFLAGS=-DCOMPAT1 to force the 1.0 behaviour with 2.0. This does not make a lot of sense though, because you're just as well staying with 1.0 then, as nothing else has changed.</p>
+<dl class="section user"><dt>Command line program</dt><dd></dd></dl>
 <p>The C++ file can also be compiled to a command line program, which is both a test tool and a handy way to manage attributes from the command line.</p>
-<p>pxattr is free software, with an MIT-type license, use and redistribute freely.</p>
-<p>Download pxattr: <a href="pxattr-2.0.2.tar.gz">pxattr-2.0.2.tar.gz</a></p>
-<dl class="section user"><dt>Licensing</dt><dd>Copyright (c) 2009 Jean-Francois Dockes </dd></dl>
+<p>Especially, the command line program can produce a dump of the extended attributes for a directory tree. This dump can then be restored if the tree has been copied elsewhere. This works across the three platforms and can provide a workaround for the current lack of common extended attributes archiving commands. Method: </p>
+<pre class="fragment">cd /just/above/my/treedir/..
+pxattr -lR treedir &gt; treedir/extattr_archive.txt # or whatever...
+tar cf /tmp/myarchive.tar treedir
+</pre><p>On the target: </p>
+<pre class="fragment">tar xf myarchive.tar
+pxattr -S treedir/extattr_archive.txt
+</pre><p>Notice that I took care to preserve the relative paths when doing the backup and the restore. In a pinch, the dump could be edited to fix the paths (use sed or emacs), the dump format is line-oriented but as binary as the extended attributes contents, with just a few escaped characters.</p>
+<dl class="section user"><dt>license</dt><dd>pxattr is free software, with an MIT-type license, use and redistribute freely.</dd></dl>
+<dl class="section user"><dt>Download pxattr </dt><dd><a href="pxattr-2.1.0.tar.gz">pxattr-2.1.0.tar.gz</a></dd></dl>
+<dl class="section user"><dt>Building the driver</dt><dd>You will need g++ and make (and nothing else as far as I know). Typing "make" inside the source directory should then be enough.</dd></dl>
+<dl class="section user"><dt>Note</dt><dd>The previous version of the library had a bug which had it adding the "user." prefix to names on other platforms. This was not a main issue inside pxattr, but posed a compatibility problem when using raw system utilities or moving files between systems. Version 2.0 fixes this problem but the change means that it is incompatible with attributes created by pxattr 1.0 (which contain the "user." prefix, which will appear when listing the attributes and now need to be added when fetching a value. You can use "make CXXFLAGS=-DCOMPAT1 to force the 1.0 behaviour with 2.0. This does not make a lot of sense though, because you're just as well staying with 1.0 then, as nothing else has changed.</dd></dl>
+<dl class="section user"><dt>Licensing</dt><dd>Copyright (c) 2009-2013 Jean-Francois Dockes </dd></dl>
 <dl class="section user"><dt></dt><dd>Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: </dd></dl>
 <dl class="section user"><dt></dt><dd>The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. </dd></dl>
 <dl class="section user"><dt></dt><dd>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. </dd></dl>
 </div></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Sat Feb 2 2013 18:20:20 for pxattr by &#160;<a href="http://www.doxygen.org/index.html">
+Generated on Sat Feb 2 2013 18:42:40 for pxattr by &#160;<a href="http://www.doxygen.org/index.html">
 <img class="footer" src="doxygen.png" alt="doxygen"/>
 </a> 1.8.1.2
 </small></address>

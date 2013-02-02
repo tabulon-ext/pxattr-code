@@ -470,7 +470,7 @@ bool pxname(nspace dom, const string& sname, string* pname)
 
 } // namespace pxattr
 
-#else // Testing / driver ->
+#else // TEST_PXATTR Testing / driver ->
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -481,6 +481,10 @@ bool pxname(nspace dom, const string& sname, string* pname)
 #include <ftw.h>
 
 #include <iostream>
+#include <fstream>
+#include <map>
+#include <algorithm>
+#include <string>
 using namespace std;
 
 #include "pxattr.h"
@@ -608,9 +612,71 @@ static void dotests()
     exit(0);
 }
 
+// \-quote character c in input \ -> \\, nl -> \n cr -> \rc -> \c
+static void quote(const string& in, string& out, int c)
+{
+    out.clear();
+    for (string::const_iterator it = in.begin(); it != in.end(); it++) {
+	if (*it == '\\') {
+	    out += "\\\\";
+	} else if (*it == "\n"[0]) {
+	    out += "\\n";
+	} else if (*it == "\r"[0]) {
+	    out += "\\r";
+	} else if (*it == c) {
+	    out += "\\";
+	    out += c;
+	} else {
+	    out += *it;
+	}
+    }
+}
+
+// \-unquote input \n -> nl, \r -> cr, \c -> c
+static void unquote(const string& in, string& out)
+{
+    out.clear();
+    for (unsigned int i = 0; i < in.size(); i++) {
+	if (in[i] == '\\') {
+	    if (i == in.size() -1) {
+		out += in[i];
+	    } else {
+		int c = in[++i];
+		switch (c) {
+		case 'n': out += "\n";break;
+		case 'r': out += "\r";break;
+		default: out += c;
+		}
+	    }
+	} else {
+	    out += in[i];
+	}
+    }
+}
+
+// Find first unquoted c in input: c preceded by odd number of backslashes
+string::size_type find_first_unquoted(const string& in, int c)
+{
+    int q = 0;
+    for (unsigned int i = 0;i < in.size(); i++) {
+	if (in[i] == '\\') {
+	    q++;
+	} else if (in[i] == c) {
+	    if (q&1) {
+		// quoted
+		q = 0;
+	    } else {
+		return i;
+	    }
+	} else {
+	    q = 0;
+	}
+    }
+    return string::npos;
+}
+static const string PATH_START("Path: ");
 static void listattrs(const string& path)
 {
-    cout << "Path: " << path << endl;
     vector<string> names;
     if (!pxattr::list(path, &names)) {
 	if (errno == ENOENT) {
@@ -619,6 +685,16 @@ static void listattrs(const string& path)
 	perror("pxattr::list");
 	exit(1);
     }
+    if (names.empty())
+	return;
+
+    // Sorting the names would not be necessary but it makes easier comparing
+    // backups
+    sort(names.begin(), names.end());
+
+    string quoted;
+    quote(path, quoted, 0);
+    cout << PATH_START << quoted << endl;
     for (vector<string>::const_iterator it = names.begin(); 
 	 it != names.end(); it++) {
 	string value;
@@ -629,7 +705,10 @@ static void listattrs(const string& path)
 	    perror("pxattr::get");
 	    exit(1);
 	}
-	cout << " " << *it << " => " << value << endl;
+	quote(*it, quoted, '=');
+	cout << " " << quoted << "=";
+	quote(value, quoted, 0);
+	cout << quoted << endl;
     }
 }
 
@@ -638,6 +717,72 @@ void setxattr(const string& path, const string& name, const string& value)
     if (!pxattr::set(path, name, value)) {
 	perror("pxattr::set");
 	exit(1);
+    }
+}
+
+// Restore xattrs stored in file created by pxattr -lR output
+static void restore(const char *backupnm)
+{
+    istream *input;
+    ifstream fin;
+    if (!strcmp(backupnm, "stdin")) {
+	input = &cin;
+    } else {
+	fin.open(backupnm, ios::in);
+	input = &fin;
+    }
+
+    bool done = false;
+    int linenum = 0;
+    string path;
+    map<string, string> attrs;
+    while (!done) {
+	string line;
+	getline(*input, line);
+	if (!input->good()) {
+	    if (input->bad()) {
+                cerr << "Input I/O error" << endl;
+		exit(1);
+	    }
+	    done = true;
+	} else {
+	    linenum++;
+	}
+
+	// cout << "Got line " << linenum << " : [" << line << "] done " << 
+	// done << endl;
+
+	if (line.find(PATH_START) == 0 || done) {
+	    if (!path.empty() && !attrs.empty()) {
+		for (map<string,string>::const_iterator it = attrs.begin();
+		     it != attrs.end(); it++) {
+		    setxattr(path, it->first, it->second);
+		}
+	    }
+	    if (!done) {
+		line = line.substr(PATH_START.size(), string::npos);
+		unquote(line, path);
+		attrs.clear();
+	    }
+	} else if (line.empty()) {
+	    continue;
+	} else {
+	    // Should be attribute line
+	    if (line[0] != ' ') {
+		cerr << "Found bad line (no space) at " << linenum << endl;
+		exit(1);
+	    }
+	    string::size_type pos = find_first_unquoted(line, '=');
+	    if (pos == string::npos || pos < 2 || pos >= line.size()) {
+		cerr << "Found bad line at " << linenum << endl;
+		exit(1);
+	    }
+	    string qname = line.substr(1, pos-1);
+	    pair<string,string> entry;
+	    unquote(qname, entry.first);
+	    unquote(line.substr(pos+1), entry.second);
+	    attrs.insert(entry);
+	}
     }
 }
 
@@ -670,6 +815,9 @@ static char usage [] =
 "pxattr [-h] -x name pathname [...] : delete attribute\n"
 "pxattr [-h] [-l] [-R] pathname [...] : list attribute names and values\n"
 " [-h] : don't follow symbolic links (act on link itself)\n"
+" [-R] : recursive listing. Args should be directory(ies)"
+"pxattr -S <backupfile> Restore xattrs from file created by pxattr -lR output\n"
+"               if backupfile is 'stdin', reads from stdin\n"
 "pxattr -T: run tests on temp file in current directory" 
 "\n"
 ;
@@ -689,6 +837,7 @@ static int     op_flags;
 #define OPT_l     0x20
 #define OPT_T     0x40
 #define OPT_R     0x80
+#define OPT_S     0x100
 
 static string name, value;
 
@@ -727,6 +876,7 @@ int main(int argc, char **argv)
 		name = *(++argv); argc--; 
 		goto b1;
 	    case 'R':	op_flags |= OPT_R; break;
+	    case 'S':	op_flags |= OPT_S; break;
 	    case 'T':	op_flags |= OPT_T; break;
 	    case 'v':	op_flags |= OPT_v; if (argc < 2)  Usage();
 		value = *(++argv); argc--; 
@@ -743,6 +893,13 @@ int main(int argc, char **argv)
 	if (argc > 0)
 	    Usage();
 	dotests();
+	exit(0);
+    }
+
+    if (op_flags & OPT_S)  {
+	if (argc != 1)
+	    Usage();
+	restore(argv[0]);
 	exit(0);
     }
 

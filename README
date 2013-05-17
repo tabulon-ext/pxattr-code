@@ -1,4 +1,5 @@
-Pxattr provide a Linux/FreeBSD/Mac OS X cross-platform uniform interface to user file extended attributes, with a backup/restore tool (for attributes only).
+Pxattr provide a Linux/FreeBSD/Mac OS X cross-platform uniform interface to 
+user file extended attributes, with an attributes backup/restore tool.
 
 Full documentation: http://www.lesbonscomptes.com/pxattr/ 
 or doc/html/index.html inside the source tree.

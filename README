@@ -1,2 +1,4 @@
-Point your browser to http://www.lesbonscomptes.com/pxattr/ (download
-link on the page) or to doc/html/index.html for local documentation.
+Pxattr provide a Linux/FreeBSD/Mac OS X cross-platform uniform interface to user file extended attributes, with a backup/restore tool (for attributes only).
+
+Full documentation: http://www.lesbonscomptes.com/pxattr/ 
+or doc/html/index.html inside the source tree.

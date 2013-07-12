@@ -29,7 +29,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 // We want this to compile even to empty on non-supported systems. makes
 // things easier for autoconf
-#if defined(__FreeBSD__) || defined(__gnu_linux__) || defined(__APPLE__)
+#if defined(__FreeBSD__) || defined(__gnu_linux__) || defined(__APPLE__) || \
+    defined(__CYGWIN32__)
 
 #ifndef TEST_PXATTR
 
@@ -42,6 +43,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include <sys/extattr.h>
 #include <sys/uio.h>
 #elif defined(__gnu_linux__)
+#include <sys/xattr.h>
+#elif defined(__CYGWIN32__)
 #include <sys/xattr.h>
 #elif defined(__APPLE__)
 #include <sys/xattr.h>

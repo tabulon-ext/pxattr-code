@@ -484,6 +484,8 @@ bool pxname(nspace dom, const string& sname, string* pname)
 
 #else // TEST_PXATTR Testing / driver ->
 
+#include "pxattr.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -491,15 +493,17 @@ bool pxname(nspace dom, const string& sname, string* pname)
 #include <errno.h>
 #include <string.h>
 #include <ftw.h>
+#include <sys/types.h>
+#include <regex.h>
 
 #include <iostream>
 #include <fstream>
 #include <map>
 #include <algorithm>
 #include <string>
+
 using namespace std;
 
-#include "pxattr.h"
 
 static int antiverbose;
 
@@ -724,6 +728,7 @@ static void restore(const char *backupnm)
 static char *thisprog;
 static char usage [] =
 "pxattr [-hs] -n name pathname [...] : show value for name\n"
+"pxattr [-hs] -n name -r regexp pathname [...] : test value against regexp\n"
 "pxattr [-hs] -n name -v value pathname [...] : add/replace attribute\n"
 "pxattr [-hs] -x name pathname [...] : delete attribute\n"
 "pxattr [-hs] [-l] [-R] pathname [...] : list attribute names and values\n"
@@ -746,17 +751,45 @@ Usage(void)
 
 static int     op_flags;
 #define OPT_MOINS 0x1
-#define OPT_n	  0x2 
-#define OPT_v	  0x4 
-#define OPT_h     0x8
-#define OPT_x     0x10
-#define OPT_l     0x20
-#define OPT_T     0x40
-#define OPT_R     0x80
-#define OPT_S     0x100
-#define OPT_s     0x200
+#define OPT_h     0x2
+#define OPT_l     0x4
+#define OPT_n	  0x8
+#define OPT_r     0x10
+#define OPT_R     0x20
+#define OPT_S     0x40
+#define OPT_T     0x80
+#define OPT_s     0x100
+#define OPT_v	  0x200
+#define OPT_x     0x400
 
+// Static values for ftw
 static string name, value;
+
+bool regex_test(const char *path, regex_t *preg)
+{
+    string value;
+    if (!pxattr::get(path, name, &value)) {
+	if (errno == ENOENT) {
+	    return false;
+	}
+	printsyserr("pxattr::get");
+        return false;
+    }
+
+    int ret = regexec(preg, value.c_str(), 0, 0, 0);
+    if (ret == 0) {
+        message(path << endl);
+        return true;
+    } else if (ret == REG_NOMATCH) {
+        return false;
+    } else {
+        char errmsg[200];
+        regerror(ret, preg, errmsg, 200);
+        errno = 0;
+        printsyserr("regexec");
+        return false;
+    }
+}
 
 bool processfile(const char* fn, const struct stat *, int)
 {
@@ -775,6 +808,7 @@ bool processfile(const char* fn, const struct stat *, int)
     }
     Usage();
 }
+
 int ftwprocessfile(const char* fn, const struct stat *sb, int typeflag)
 {
     processfile(fn, sb, typeflag);
@@ -783,9 +817,10 @@ int ftwprocessfile(const char* fn, const struct stat *sb, int typeflag)
 
 int main(int argc, char **argv)
 {
+    const char *regexp_string;
     thisprog = argv[0];
     argc--; argv++;
-
+    
     while (argc > 0 && **argv == '-') {
 	(*argv)++;
 	if (!(**argv))
@@ -798,6 +833,9 @@ int main(int argc, char **argv)
 		name = *(++argv); argc--; 
 		goto b1;
 	    case 'R':	op_flags |= OPT_R; break;
+	    case 'r':	op_flags |= OPT_r; if (argc < 2)  Usage();
+		regexp_string = *(++argv); argc--; 
+		goto b1;
 	    case 's':	antiverbose++; break;
 	    case 'S':	op_flags |= OPT_S; break;
 	    case 'T':	op_flags |= OPT_T; break;
@@ -818,14 +856,28 @@ int main(int argc, char **argv)
 	dotests();
 	exit(0);
     }
-
+    if ((op_flags & OPT_r) && !(op_flags & OPT_n)) {
+        Usage();
+    }
+    
     if (op_flags & OPT_S)  {
 	if (argc != 1)
 	    Usage();
 	restore(argv[0]);
 	exit(0);
     }
-
+    regex_t regexp;
+    if (op_flags & OPT_r) {
+        int err = regcomp(&regexp, regexp_string, REG_NOSUB|REG_EXTENDED);
+        if (err) {
+            char errmsg[200];
+            regerror(err, &regexp, errmsg, 200);
+            cerr << "regcomp(" << regexp_string << ") error: " << errmsg <<
+                endl;
+            exit(1);
+        }
+    }
+    
     // Default option is 'list'
     if ((op_flags&(OPT_l|OPT_n|OPT_x)) == 0)
 	op_flags |= OPT_l;
@@ -852,7 +904,11 @@ int main(int argc, char **argv)
 	if (op_flags & OPT_R) {
 	    if (ftw(fn, ftwprocessfile, 20))
 		exit(1);
-	} else {
+	} else if (op_flags & OPT_r) {
+            if (!regex_test(fn, &regexp)) {
+                exitvalue = 1;
+            }
+        } else {
 	    if (!processfile(fn, 0, 0)) {
                 exitvalue = 1;
             }

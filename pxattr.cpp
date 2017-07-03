@@ -27,16 +27,29 @@ OTHER DEALINGS IN THE SOFTWARE.
     \brief Portable External Attributes API
  */
 
+// PXALINUX: platforms like kfreebsd which aren't linux but use the
+// same xattr interface
 #if defined(__gnu_linux__) || \
     (defined(__FreeBSD_kernel__)&&defined(__GLIBC__)&&!defined(__FreeBSD__)) ||\
     defined(__CYGWIN__)
 #define PXALINUX
 #endif
 
-// If the platform is not supported, let this file be empty instead of
+// If the platform is not known yet, let this file be empty instead of
 // breaking the compile, this will let the build work if the rest of
-// the software is not actually calling us.
-#if defined(__FreeBSD__) || defined(PXALINUX) || defined(__APPLE__)
+// the software is not actually calling us. If it does call us, this
+// will bring attention to the necessity of a port.
+//
+// If the platform is known not to support extattrs (e.g.__OpenBSD__),
+// just let the methods return errors (like they would on a non-xattr
+// fs on e.g. linux)
+
+#if defined(__DragonFly__) || defined(__OpenBSD__)
+#define HAS_NO_XATTR
+#endif
+
+#if defined(__FreeBSD__) || defined(PXALINUX) || defined(__APPLE__) \
+    || defined(HAS_NO_XATTR)
 
 
 #ifndef TEST_PXATTR
@@ -52,6 +65,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 #include <sys/xattr.h>
 #elif defined(__APPLE__)
 #include <sys/xattr.h>
+#elif defined(HAS_NO_XATTR)
 #else
 #error "Unknown system can't compile"
 #endif
@@ -162,6 +176,8 @@ get(int fd, const string& path, const string& _name, string *value,
     } else {
 	ret = fgetxattr(fd, name.c_str(), buf.buf, ret, 0, 0);
     }
+#else
+    errno = ENOTSUP;
 #endif
 
     if (ret >= 0)
@@ -257,6 +273,8 @@ set(int fd, const string& path, const string& _name,
 	ret = fsetxattr(fd, name.c_str(), value.c_str(), 
 			value.length(), 0, opts);
     }
+#else
+    errno = ENOTSUP;
 #endif
     return ret >= 0;
 }
@@ -302,6 +320,8 @@ del(int fd, const string& path, const string& _name, flags flags, nspace dom)
     } else {
 	ret = fremovexattr(fd, name.c_str(), 0);
     }
+#else
+    errno = ENOTSUP;
 #endif
     return ret >= 0;
 }
@@ -384,7 +404,12 @@ list(int fd, const string& path, vector<string>* names, flags flags, nspace dom)
     } else {
 	ret = flistxattr(fd, buf.buf, ret, 0);
     }
+#else
+    errno = ENOTSUP;
 #endif
+
+    if (ret < 0)
+        return false;
 
     char *bufstart = buf.buf;
 

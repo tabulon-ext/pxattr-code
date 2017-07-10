@@ -677,7 +677,7 @@ bool printxattr(const string &path, const string& name)
 
 bool delxattr(const string &path, const string& name) 
 {
-    if (pxattr::del(path, name) < 0) {
+    if (!pxattr::del(path, name)) {
 	printsyserr("pxattr::del");
         return false;
     }
@@ -832,6 +832,7 @@ bool processfile(const char* fn, const struct stat *, int)
 	return delxattr(fn, name);
     }
     Usage();
+    return false;
 }
 
 int ftwprocessfile(const char* fn, const struct stat *sb, int typeflag)
